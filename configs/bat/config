@@ -1,0 +1,8 @@
+
+--theme="Catppuccin Mocha"
+
+# show line numbers and git modifications
+--style="numbers,changes"
+
+# disable less
+--paging="never"
