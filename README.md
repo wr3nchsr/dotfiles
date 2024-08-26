@@ -11,4 +11,4 @@ cd ~/.dotfiles
 ```
 
 ## Credit
-* nvim configurations are based on (NvChad)[https://github.com/NvChad/starter]
+* nvim configurations are based on [NvChad](https://github.com/NvChad/starter)
