@@ -30,5 +30,10 @@ return {
     opts = {
       indent = { char = "┊" },
     },
-  }
+  },
+
+  {
+    "christoomey/vim-tmux-navigator",
+    event = "VeryLazy"
+  },
 }
