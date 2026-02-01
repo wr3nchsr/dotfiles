@@ -19,7 +19,12 @@ local servers = {
   "yamlls",
   "vimls",
 }
+
 local nvlsp = require "nvchad.configs.lspconfig"
+nvlsp.capabilities.textDocument.foldingRange = {
+  dynamicRegistration = false,
+  lineFoldingOnly = true
+}
 
 -- lsps with default config
 for _, lsp in ipairs(servers) do
