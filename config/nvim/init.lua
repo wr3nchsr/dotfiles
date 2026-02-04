@@ -111,6 +111,7 @@ map("n", "<C-Space>", "<CMD>NvimTmuxNavigateNext<CR>")
 map("n", "<leader>ff", "<CMD>FzfLua files<CR>")
 map("n", "<leader>fg", "<CMD>FzfLua live_grep<CR>")
 map("n", "<leader>fr", "<CMD>FzfLua oldfiles<CR>")
+map("n", "<leader>fb", "<CMD>FzfLua buffers<CR>")
 
 map("n", "<leader>sh", "<CMD>split<CR>")
 map("n", "<leader>sv", "<CMD>vsplit<CR>")
