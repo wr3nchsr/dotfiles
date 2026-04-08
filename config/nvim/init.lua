@@ -1,6 +1,7 @@
 vim.o.number = true
 vim.o.relativenumber = true
 vim.o.wrap = false
+vim.o.winborder = "solid"
 vim.o.tabstop = 4
 vim.o.shiftwidth = 4
 vim.o.expandtab = true
@@ -37,6 +38,7 @@ vim.pack.add({
     { src = "https://github.com/nvim-lualine/lualine.nvim" },
 
     { src = "https://github.com/ibhagwan/fzf-lua" },
+    { src = "https://github.com/folke/which-key.nvim" },
 
     { src = "https://github.com/nvim-treesitter/nvim-treesitter" },
     { src = "https://github.com/neovim/nvim-lspconfig" },
@@ -48,7 +50,7 @@ require("vague").setup({ transparent = true })
 vim.cmd("colorscheme vague")
 
 require("nvim-tree").setup()
-local tslanguages = { "lua", "markdown", "json", "xml", "javascript", "c", "python", "go", "java" }
+local tslanguages = { "lua", "markdown", "json", "xml", "javascript", "c", "python", "go", "java", "swift" }
 require('nvim-treesitter').install(tslanguages)
 vim.api.nvim_create_autocmd("FileType", {
     pattern = tslanguages,
@@ -73,7 +75,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
 
 vim.cmd("set completeopt+=menuone,noselect,popup")
 vim.lsp.enable({
-    "lua_ls", "clangd", "ruff", "pyright", "marksman", "asm_lsp",
+    "lua_ls", "clangd", "ruff", "pyright", "marksman", "asm_lsp", "jsonls",
     "tsserver", "intelephense", "jdtls", "gopls", "rust_analyzer", "bashls"
 })
 
@@ -108,18 +110,25 @@ map("n", "<C-l>", "<CMD>NvimTmuxNavigateRight<CR>")
 map("n", "<C-\\>", "<CMD>NvimTmuxNavigateLastActive<CR>")
 map("n", "<C-Space>", "<CMD>NvimTmuxNavigateNext<CR>")
 
+map("n", "<leader>n", "<CMD>NvimTreeToggle<CR>")
+
 map("n", "<leader>ff", "<CMD>FzfLua files<CR>")
 map("n", "<leader>fg", "<CMD>FzfLua live_grep<CR>")
 map("n", "<leader>fr", "<CMD>FzfLua oldfiles<CR>")
 map("n", "<leader>fb", "<CMD>FzfLua buffers<CR>")
+map("n", "<leader>fd", "<CMD>FzfLua diagnostics_document<CR>")
+map("n", "<leader>ft", "<CMD>FzfLua filetypes<CR>")
 
-map("n", "<leader>sh", "<CMD>split<CR>")
-map("n", "<leader>sv", "<CMD>vsplit<CR>")
 map("n", "<leader>x", "<CMD>bd<CR>")
 map("n", "<leader>q", "<CMD>q<CR>")
-map("n", "<leader>t", "<CMD>NvimTreeToggle<CR>")
 
+map("n", "<leader>bb", "<CMD>enew<CR>")
+map("n", "<leader>bh", "<CMD>split<CR>")
+map("n", "<leader>bv", "<CMD>vsplit<CR>")
 map("n", "<leader>bf", vim.lsp.buf.format)
+map("n", "<Leader>bd", vim.diagnostic.open_float, { desc = "Show diagnostic" })
 map("n", "<C-d>", "<C-d>zz")
 map("n", "<C-u>", "<C-u>zz")
+map("n", "n", "nzzzv")
+map("n", "N", "Nzzzv")
 
