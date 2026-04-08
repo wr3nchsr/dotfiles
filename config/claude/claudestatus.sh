@@ -50,6 +50,7 @@ IFS=$'\x1e' read -r ctx_used ctx_pct tok_out api_dur_ms dur_ms \
 # ── Helpers ─────────────────────────────────────────────────────
 
 int() { local v="${1%%.*}"; printf '%s' "${v:-0}"; }
+fmt_pct() { awk -v v="${1:-0}" 'BEGIN{printf "%.1f",v}'; }
 
 fmt_tok() {
   local n; n=$(int "$1")
@@ -77,18 +78,6 @@ fmt_remaining() {
   (( resets > 0 )) && fmt_secs $(( resets - NOW ))
 }
 
-get_effort() {
-  local e=""
-  if [[ -n "$transcript" && -f "$transcript" ]]; then
-    e=$(tail -200 "$transcript" 2>/dev/null \
-      | grep -o '"effortLevel" *: *"[^"]*"' 2>/dev/null \
-      | tail -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
-  fi
-  [[ -z "$e" ]] && e=$(jq -r '.effortLevel // "medium"' \
-    "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" 2>/dev/null || echo medium)
-  printf '%s' "$e"
-}
-
 # green <50%, yellow 50-80%, red >80%
 usage_color() {
   local n; n=$(int "$1")
@@ -97,21 +86,60 @@ usage_color() {
   else                      printf '%s' "$V_GREEN"; fi
 }
 
-# ── Render ──────────────────────────────────────────────────────
+# Read effort + last-response speed from transcript in one pass
+read_transcript() {
+  [[ -n "$transcript" && -f "$transcript" ]] || return
+  tail -200 "$transcript" 2>/dev/null | jq -rs '
+    # effort: last effortLevel value found in any entry
+    ([.[] | objects | to_entries[] | select(.key=="effortLevel") | .value] | last // null) as $eff |
 
-# Line 1: {model} {effort} | Session: {clock}
-printf '%s%s %s%s%s%s%sSession: %s%s%s\n' \
-  "$V_CYAN" "${model%%\[*}" "$V_CYAN" "$(get_effort)" "$N" "$SEP" \
-  "$L" "$V_CYAN" "$(fmt_dur "$dur_ms")" "$N"
+    # speed: output_tokens / duration of last user→assistant pair
+    ([.[] | select(.type=="user" and .timestamp and (.isSidechain|not) and (.isMeta|not))]
+      | if length>0 then .[-1].timestamp else null end) as $ut |
+    ([.[] | select(.type=="assistant" and .timestamp
+        and ((.message.usage.output_tokens//0)>0)
+        and (.isSidechain|not) and (.isApiErrorMessage|not))]
+      | if length>0 then .[-1] else null end) as $a |
+    (if $a and $ut then
+      (($a.timestamp|sub("\\.[0-9]+Z$";"Z")|fromdate)
+        - ($ut|sub("\\.[0-9]+Z$";"Z")|fromdate)) as $d |
+      if $d > 0 then ($a.message.usage.output_tokens / $d * 10 | floor) / 10
+      else null end
+    else null end) as $spd |
 
-# Line 2: Ctx: {used} ({%}) | {tok/s}
-ctx_n=$(int "${ctx_pct:-0}")
-CC=$(usage_color "$ctx_n")
-ctx_pct_fmt=$(awk -v v="${ctx_pct:-0}" 'BEGIN{printf "%.1f",v}')
+    [($eff // ""), ($spd // "" | tostring)] | join("\u001e")
+  ' 2>/dev/null || true
+}
 
-out_n=$(int "$tok_out"); api_n=$(int "$api_dur_ms")
-if (( api_n > 0 )); then
-  speed=$(awk -v t="$out_n" -v ms="$api_n" 'BEGIN{printf "%.1f",t/ms*1000}')
+# Render a rate-limit widget: render_limit label pct resets_at
+render_limit() {
+  local label=$1 pct=$2 resets=$3
+  [[ "$(int "$pct")" == "-1" ]] && return
+  local c; c=$(usage_color "$pct")
+  local out="${L}${label}: ${c}$(fmt_pct "$pct")%${N}"
+  local r; r=$(fmt_remaining "$resets")
+  [[ -n "$r" ]] && out+=" ${L}(${r})${N}"
+  printf '%s' "$out"
+}
+
+# ── Transcript data ─────────────────────────────────────────────
+t_effort="" t_speed=""
+if t_data=$(read_transcript); then
+  IFS=$'\x1e' read -r t_effort t_speed <<< "$t_data"
+fi
+
+# Resolve effort: transcript → settings → default
+effort="${t_effort:-$(jq -r '.effortLevel // "medium"' \
+  "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" 2>/dev/null || echo medium)}"
+
+# Resolve speed: transcript → session average → "--"
+speed="$t_speed"
+if [[ -z "$speed" ]]; then
+  api_n=$(int "$api_dur_ms")
+  (( api_n > 0 )) && speed=$(awk -v t="$(int "$tok_out")" -v ms="$api_n" 'BEGIN{printf "%.1f",t/ms*1000}')
+fi
+if [[ -n "$speed" ]]; then
+  speed=$(fmt_pct "$speed")
   sn=$(int "$speed")
   if   (( sn >= 40 )); then SC=$V_GREEN
   elif (( sn >= 20 )); then SC=$V_YEL
@@ -119,28 +147,24 @@ if (( api_n > 0 )); then
 else
   speed="--"; SC=$L
 fi
+
+# ── Render ──────────────────────────────────────────────────────
+
+# Line 1: {model} {effort} | Session: {clock}
+printf '%s%s %s%s%s%s%sSession: %s%s%s\n' \
+  "$V_CYAN" "${model%%\[*}" "$V_CYAN" "$effort" "$N" "$SEP" \
+  "$L" "$V_CYAN" "$(fmt_dur "$dur_ms")" "$N"
+
+# Line 2: Ctx: {used} ({%}) | {tok/s}
+CC=$(usage_color "${ctx_pct:-0}")
 printf '%sCtx: %s%s %s(%s%%)%s%s%s%s tok/s%s\n' \
-  "$L" "$CC" "$(fmt_tok "$ctx_used")" "$L" "$ctx_pct_fmt" "$N" "$SEP" \
+  "$L" "$CC" "$(fmt_tok "$ctx_used")" "$L" "$(fmt_pct "$ctx_pct")" "$N" "$SEP" \
   "$SC" "$speed" "$N"
 
 # Line 3: 5hr: {%} ({time}) | 7d: {%} ({time})
-parts=()
-if [[ "$(int "$session_pct")" != "-1" ]]; then
-  sc=$(usage_color "$session_pct")
-  val=$(awk -v v="$session_pct" 'BEGIN{printf "%.1f",v}')
-  p="${L}5hr: ${sc}${val}%${N}"
-  sr=$(fmt_remaining "$session_resets"); [[ -n "$sr" ]] && p+=" ${L}(${sr})${N}"
-  parts+=("$p")
-fi
-if [[ "$(int "$weekly_pct")" != "-1" ]]; then
-  wc=$(usage_color "$weekly_pct")
-  val=$(awk -v v="$weekly_pct" 'BEGIN{printf "%.1f",v}')
-  p="${L}7d: ${wc}${val}%${N}"
-  wr=$(fmt_remaining "$weekly_resets"); [[ -n "$wr" ]] && p+=" ${L}(${wr})${N}"
-  parts+=("$p")
-fi
-if [[ ${#parts[@]} -gt 0 ]]; then
-  out="${parts[0]}"
-  [[ ${#parts[@]} -gt 1 ]] && out+="${SEP}${parts[1]}"
-  printf '%s\n' "$out"
+s=$(render_limit "5hr" "$session_pct" "$session_resets")
+w=$(render_limit "7d" "$weekly_pct" "$weekly_resets")
+if [[ -n "$s" || -n "$w" ]]; then
+  if [[ -n "$s" && -n "$w" ]]; then printf '%s%s%s\n' "$s" "$SEP" "$w"
+  else printf '%s\n' "${s}${w}"; fi
 fi
