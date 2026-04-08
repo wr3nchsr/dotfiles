@@ -29,4 +29,6 @@ bindings = [
   { key = "Enter", mods = "Command", action="ToggleFullscreen"},
   { key = "c", mods = "Command", action="Copy"},
   { key = "v", mods = "Command", action="Paste"},
+  { key = "Return", mods = "Shift", chars = "\u001B\r"},
 ]
+
