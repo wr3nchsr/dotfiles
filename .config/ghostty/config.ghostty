@@ -1,0 +1,5 @@
+theme = "Nvim Dark"
+font-family = "Hack Nerd Font Mono"
+background-opacity = 0.99
+keybind = shift+enter=text:\x1b\r
+quit-after-last-window-closed = true
